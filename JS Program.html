@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Planner App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+    }
+    .page {
+      display: none;
+      padding: 20px;
+    }
+    .active {
+      display: block;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      border-radius: 6px;
+      border: none;
+      font-size: 1rem;
+    }
+    button {
+      background: #38bdf8;
+      cursor: pointer;
+    }
+    .nav {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-top: 10px;
+    }
+    .day {
+      background: #1e293b;
+      padding: 15px;
+      text-align: center;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .day.red {
+      background: #dc2626 !important;
+    }
+    .popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 10px;
+      display: none;
+      width: 80%;
+      max-width: 400px;
+    }
+    .popup h3 { margin-top: 0; }
+    .popup button { background: #ef4444; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- PAGE 1: LOGIN -->
+  <div id="page-login" class="page active">
+    <h1>Login</h1>
+    <input id="login-username" placeholder="Username">
+    <input id="login-password" type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <button onclick="register()">Register</button>
+  </div>
+
+  <!-- PAGE 2: PLANNER -->
+  <div id="page-planner" class="page">
+    <h1>Planner Input</h1>
+    <input id="task-title" placeholder="Title">
+    <input id="task-date" type="date">
+    <textarea id="task-desc" placeholder="Description"></textarea>
+    <button onclick="addTask()">Add Task</button>
+
+    <div class="nav">
+      <button onclick="openPage('page-calendar')">Go to Calendar</button>
+      <button onclick="logout()" style="background:#ef4444">Logout</button>
+    </div>
+  </div>
+
+  <!-- PAGE 3: CALENDAR -->
+  <div id="page-calendar" class="page">
+    <h1>Calendar</h1>
+
+    <div class="nav">
+      <button onclick="openPage('page-planner')">Back to Planner</button>
+      <button onclick="logout()" style="background:#ef4444">Logout</button>
+    </div>
+
+    <h3 id="monthLabel"></h3>
+    <div class="calendar" id="calendar"></div>
+  </div>
+
+</div>
+
+<!-- POPUP -->
+<div id="popup" class="popup">
+  <h3>Planned Tasks</h3>
+  <div id="popup-content"></div>
+  <button onclick="closePopup()">Close</button>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script>
+/* -------------------------------------------------------
+   1. FIREBASE CONFIG
+------------------------------------------------------- */
+const firebaseConfig = {
+        apiKey: "AIzaSyDL7PAP6GbzQ_UxJTSYjgrkk36gNQKLx4U",
+        authDomain: "js-project-a49ab.firebaseapp.com",
+        projectId: "js-project-a49ab",
+        storageBucket: "js-project-a49ab.appspot.com",
+        messagingSenderId: "373663091418",
+        appId: "1:373663091418:web:37c808b0ac24b76f5173e3",
+        measurementId: "G-6YWV5661S5"
+    };
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* -------------------------------------------------------
+   2. PAGE SWITCHING
+------------------------------------------------------- */
+function openPage(id) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+
+  if (id === "page-calendar") loadCalendar();
+}
+
+/* -------------------------------------------------------
+   3. LOGIN & REGISTER
+------------------------------------------------------- */
+function login() {
+  let email = document.getElementById("login-username").value + "@planner.local";
+  let pw = document.getElementById("login-password").value;
+
+  auth.signInWithEmailAndPassword(email, pw)
+    .then(() => openPage("page-planner"))
+    .catch(e => alert(e.message));
+}
+
+function register() {
+  let email = document.getElementById("login-username").value + "@planner.local";
+  let pw = document.getElementById("login-password").value;
+
+  auth.createUserWithEmailAndPassword(email, pw)
+    .then(() => openPage("page-planner"))
+    .catch(e => alert(e.message));
+}
+
+function logout() {
+  auth.signOut().then(() => openPage("page-login"));
+}
+
+/* -------------------------------------------------------
+   4. ADD TASK
+------------------------------------------------------- */
+function addTask() {
+  let user = auth.currentUser;
+  if (!user) return;
+
+  let title = document.getElementById("task-title").value;
+  let date = document.getElementById("task-date").value;
+  let desc = document.getElementById("task-desc").value;
+
+  if (!title || !date) {
+    alert("Title & Date required");
+    return;
+  }
+
+  db.collection("tasks").add({
+    userId: user.uid,
+    title,
+    date,
+    desc
+  });
+
+  document.getElementById("task-title").value = "";
+  document.getElementById("task-date").value = "";
+  document.getElementById("task-desc").value = "";
+
+  alert("Task added!");
+}
+
+/* -------------------------------------------------------
+   5. CALENDAR
+------------------------------------------------------- */
+function loadCalendar() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0);
+
+  const monthLabel = document.getElementById("monthLabel");
+  const calendar = document.getElementById("calendar");
+  calendar.innerHTML = "";
+
+  monthLabel.innerText = now.toLocaleString("default", { month: "long", year: "numeric" });
+
+  const startDay = first.getDay();
+  for (let i = 0; i < startDay; i++) {
+    const blank = document.createElement("div");
+    calendar.appendChild(blank);
+  }
+
+  let user = auth.currentUser;
+  db.collection("tasks").where("userId", "==", user.uid).get().then(snap => {
+    let tasks = {};
+    snap.forEach(doc => {
+      let d = doc.data().date;
+      if (!tasks[d]) tasks[d] = [];
+      tasks[d].push(doc.data());
+    });
+
+    for (let day = 1; day <= last.getDate(); day++) {
+      const div = document.createElement("div");
+      div.className = "day";
+
+      let dateStr = `${y}-${String(m+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+      div.innerText = day;
+
+      if (tasks[dateStr]) {
+        div.classList.add("red");
+        div.onclick = () => openDay(tasks[dateStr]);
+      } else {
+        div.onclick = () => alert("No plans for this day.");
+      }
+
+      calendar.appendChild(div);
+    }
+  });
+}
+
+/* -------------------------------------------------------
+   6. POPUP
+------------------------------------------------------- */
+function openDay(list) {
+  let msg = "";
+  list.forEach(t => {
+    msg += `<p><b>${t.title}</b><br>${t.desc}</p>`;
+  });
+
+  document.getElementById("popup-content").innerHTML = msg;
+  document.getElementById("popup").style.display = "block";
+}
+
+function closePopup() {
+  document.getElementById("popup").style.display = "none";
+}
+</script>
+
+</body>
+</html>
